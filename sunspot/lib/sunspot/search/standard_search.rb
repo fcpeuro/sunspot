@@ -23,15 +23,8 @@ module Sunspot
       #           "collation" is only included if spellcheck.collation was set to true
       # Returns: { term => suggestion, term => suggestion }
       def spellcheck_suggestions
-        unless defined?(@spellcheck_suggestions)
-          @spellcheck_suggestions = {}
-          count = ((solr_spellcheck['suggestions'] || []).length) / 2
-          (0..(count - 1)).each do |i|
-            break if ["correctlySpelled", "collation"].include? solr_spellcheck[i]
-            term = solr_spellcheck['suggestions'][i * 2]
-            suggestion = solr_spellcheck['suggestions'][(i * 2) + 1]
-            @spellcheck_suggestions[term] = suggestion
-          end
+        if !defined?(@spellcheck_suggestions) && solr_spellcheck["suggestions"].present?
+          @spellcheck_suggestions = Hash[*solr_spellcheck["suggestions"]]
         end
         @spellcheck_suggestions
       end
@@ -54,7 +47,7 @@ module Sunspot
       #
       # Mix and match in your views for a blend of strict and liberal collations.
       def spellcheck_collation(*terms)
-        if solr_spellcheck['suggestions'] && solr_spellcheck['suggestions'].length > 2
+        if spellcheck_suggestions.present?
           collation = terms.join(" ").dup if terms
 
           # If we are given a query string, tokenize it and strictly replace
@@ -69,8 +62,9 @@ module Sunspot
 
           # If no query was given, or all terms are present in the index,
           # return Solr's suggested collation.
-          if terms.length == 0
-            collation = solr_spellcheck['suggestions'][-1]
+          if terms.length == 0 && solr_spellcheck['collations'].is_a?(Array)
+            collation_info = solr_spellcheck['collations'][-1] || {}
+            collation = collation_info['collationQuery']
           end
 
           collation
